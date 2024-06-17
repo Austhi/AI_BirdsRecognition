@@ -109,7 +109,7 @@ def train_model(base_model):
     print(f"Test loss: {test_loss}")
 
     # Save the trained model
-    model.save(f'{model_type}_model.h5')
+    model.save(f'{model_type}_{number_classes}_model.h5')
 
 def train_module_resnet50():
     base_model = ResNet50(weights='imagenet', include_top=False, input_shape=(img_height, img_width, 3))

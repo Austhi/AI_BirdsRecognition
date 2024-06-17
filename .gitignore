@@ -1,5 +1,5 @@
 dataset.zip
-dataset/train/
+dataset/train/*/
 dataset/test/
 dataset/val/
 venv/
