@@ -1,12 +1,20 @@
 import os
 import sys
+import time
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
 from tensorflow.keras.applications import ResNet50, DenseNet121
 # from tensorflow.keras.applications.mobilenet_v3 import MobileNetV3Large, MobileNetV3Small
-from tensorflow.keras.models import Model
+from tensorflow.keras.models import Model, load_model
 from tensorflow.keras.layers import Dense, GlobalAveragePooling2D, Dropout
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
+from tensorflow.keras.metrics import AUC
+
+from model_evaluation import evaluate_model
 
 # Verify Pillow installation
 from PIL import Image
@@ -16,7 +24,7 @@ def initialise_elements():
     # Define image dimensions and batch size
     img_height, img_width = 256, 256
     batch_size = 32
-    epochs = 50
+    epochs = 50 # 50
     model_type = sys.argv[1] if len(sys.argv) > 1 else "resnet50"  # resnet50 // dense121 // mobilenetv3
     dataset_folder = 'dataset/'
 
@@ -89,44 +97,89 @@ def train_model(base_model):
         layer.trainable = True
 
     # Recompile the model for these modifications to take effect
-    model.compile(optimizer=Adam(learning_rate=0.0001), loss='categorical_crossentropy', metrics=['accuracy'])
+    model.compile(optimizer=Adam(learning_rate=0.001), loss='categorical_crossentropy', metrics=['accuracy', AUC(name='mAP')])
 
     # Add callbacks for early stopping and reducing learning rate on plateau
     early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
-    reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=0.0001)
+    reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=0.001)
 
+    # Measure training time
+    start_time = time.time()
+    
     # Train the model
-    model.fit(
+    history = model.fit(
         train_generator,
         epochs=epochs,
         validation_data=validation_generator,
         callbacks=[early_stopping, reduce_lr]
     )
 
-    # Evaluate the model
-    test_loss, test_accuracy = model.evaluate(test_generator)
+    # Measure training time
+    end_time = time.time()
+
+        # Evaluate the model
+    test_loss, test_accuracy, test_mAP = model.evaluate(test_generator)
     print(f"Test accuracy: {test_accuracy}")
+    print(f"Test mAP: {test_mAP}")
     print(f"Test loss: {test_loss}")
+    print(f"Training time: {end_time - start_time} seconds")
 
     # Save the trained model
-    model.save(f'{model_type}_{number_classes}_model.h5')
+    model_name = f'{model_type}_3_classes.h5'
+    model.save('models/' + model_name)
+    return history, test_accuracy, test_mAP, end_time - start_time, model_name, model
 
-def train_module_resnet50():
-    base_model = ResNet50(weights='imagenet', include_top=False, input_shape=(img_height, img_width, 3))
-    train_model(base_model)
+def visualize_results(history, model_type, model_name):
+    # Plot training & validation accuracy values
+    plt.figure(figsize=(12, 4))
+    plt.subplot(1, 2, 1)
+    plt.plot(history.history['accuracy'])
+    plt.plot(history.history['val_accuracy'])
+    plt.title(f'{model_type} Model accuracy')
+    plt.ylabel('Accuracy')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'Validation'], loc='upper left')
 
-def train_module_dense121():
-    base_model = DenseNet121(weights='imagenet', include_top=False, input_shape=(img_height, img_width, 3))
-    train_model(base_model)
+    # Plot training & validation loss values
+    plt.subplot(1, 2, 2)
+    plt.plot(history.history['loss'])
+    plt.plot(history.history['val_loss'])
+    plt.title(f'{model_type} Model loss')
+    plt.ylabel('Loss')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'Validation'], loc='upper left')
 
-def train_module_mobilenetv3():
-    base_model = MobileNetV3Large(weights='imagenet', include_top=False, input_shape=(img_height, img_width, 3))
-    train_model(base_model)
+    plt.savefig(f'figs/{model_name}_performance.png')
+    plt.show()
+
+def plot_confusion_matrix(test_generator, model, model_name):
+    # Predict
+    Y_pred = model.predict(test_generator)
+    y_pred = np.argmax(Y_pred, axis=1)
+    y_true = test_generator.classes
+
+    cm = confusion_matrix(y_true, y_pred)
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=list(test_generator.class_indices.keys()), yticklabels=list(test_generator.class_indices.keys()))
+    plt.title('Confusion Matrix')
+    plt.ylabel('Actual class')
+    plt.xlabel('Predicted class')
+    plt.savefig(f'figs/{model_name}_confusion_matrix.png')
+    plt.show()
+
 
 if model_type == "resnet50":
-    train_module_resnet50()
+    base_model = ResNet50(weights='imagenet', include_top=False, input_shape=(img_height, img_width, 3))
 elif model_type == "dense121":
-    train_module_dense121()
+    base_model = DenseNet121(weights='imagenet', include_top=False, input_shape=(img_height, img_width, 3))
 elif model_type == "mobilenetv3":
-    print("Not implemented yet")
-    # train_module_mobilenetv3()
+    # print("Not implemented Yet")
+    raise ValueError("Not implemented yet")
+    # base_model = MobileNetV3Large(weights='imagenet', include_top=False, input_shape=(img_height, img_width, 3))
+else:
+    raise ValueError("Invalid model type specified. Choose from 'resnet50', 'dense121', or 'mobilenetv3'.")
+
+history, test_accuracy, test_mAP, training_time, model_name, model = train_model(base_model)
+visualize_results(history, model_type, model_name)
+plot_confusion_matrix(test_generator, model, model_name)
+evaluate_model(test_generator, model_name)

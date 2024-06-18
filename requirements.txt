@@ -1,3 +1,6 @@
 numpy
 tensorflow
 scipy
+matplotlib
+seaborn
+scikit-learn
