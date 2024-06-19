@@ -5,9 +5,9 @@ from PIL import Image
 import numpy as np
 
 # Define parameters
-zip_path = 'C:/Users/Victus/Desktop/DataPreparation/ShuffledData.zip'
-extract_to = 'dataset'
-base_dir = 'data_split'
+zip_path = 'ShuffledData.zip'
+extract_to = 'dataset_Extract'
+base_dir = 'dataset'
 categories = ['Parrot', 'Eagle', 'Hornbill', 'Duck', 'Owl']
 
 # Function to extract dataset
