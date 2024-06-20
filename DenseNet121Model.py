@@ -44,7 +44,7 @@ for i in range(len(class_names)):
     for j in range(len(class_names)):
         plt.text(j, i, str(cm[i, j]), horizontalalignment='center', color='white' if cm[i, j] > cm.max() / 2 else 'black')
 plt.tight_layout()
-plt.savefig(os.path.join(graph_dir, 'DenseNet_confusion_matrix.png'))
+plt.savefig(os.path.join(graph_dir, 'dense121_5_model.h5_confusion_matrix.png'))
 plt.show()
 
 # Classification report
