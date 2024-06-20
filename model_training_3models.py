@@ -5,7 +5,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from tensorflow.keras.applications import ResNet50, DenseNet121
+from tensorflow.keras.applications import ResNet50, DenseNet121, MobileNetV3Large
+from tensorflow.keras.applications import MobileNetV3Small
 # from tensorflow.keras.applications.mobilenet_v3 import MobileNetV3Large, MobileNetV3Small
 from tensorflow.keras.models import Model, load_model
 from tensorflow.keras.layers import Dense, GlobalAveragePooling2D, Dropout
@@ -13,6 +14,8 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 from tensorflow.keras.metrics import AUC
+from sklearn.metrics import confusion_matrix, classification_report, average_precision_score
+
 
 from model_evaluation import evaluate_model
 
@@ -22,10 +25,13 @@ print("Pillow is installed and imported successfully!")
 
 def initialise_elements():
     # Define image dimensions and batch size
-    img_height, img_width = 256, 256
+    model_type = sys.argv[1] if len(sys.argv) > 1 else "resnet50"  # resnet50 // dense121 // mobilenetv3
+    if model_type == "mobilenetv3":
+        img_height, img_width = 224, 224
+    else:
+        img_height, img_width = 256, 256
     batch_size = 32
     epochs = 50 # 50
-    model_type = sys.argv[1] if len(sys.argv) > 1 else "resnet50"  # resnet50 // dense121 // mobilenetv3
     dataset_folder = 'dataset/'
 
     return img_height, img_width, batch_size, epochs, model_type, dataset_folder
@@ -92,21 +98,21 @@ def train_model(base_model):
     # Create the model
     model = Model(inputs=base_model.input, outputs=predictions)
 
-    # Unfreeze the last few layers of the base model
-    for layer in base_model.layers[-10:]:
-        layer.trainable = True
+    # Freeze more layers initially and then unfreeze for fine-tuning
+    for layer in base_model.layers:
+        layer.trainable = False
 
-    # Recompile the model for these modifications to take effect
+    # Compile the model
     model.compile(optimizer=Adam(learning_rate=0.001), loss='categorical_crossentropy', metrics=['accuracy', AUC(name='mAP')])
 
     # Add callbacks for early stopping and reducing learning rate on plateau
     early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
-    reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=0.001)
+    reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=0.00001)
 
     # Measure training time
     start_time = time.time()
     
-    # Train the model
+    # Train the model with initial frozen layers
     history = model.fit(
         train_generator,
         epochs=epochs,
@@ -114,10 +120,30 @@ def train_model(base_model):
         callbacks=[early_stopping, reduce_lr]
     )
 
+    # Unfreeze the last few layers of the base model
+    if model_type != "mobilenetv3": 
+        for layer in base_model.layers[-10:]:
+            layer.trainable = True
+
+    # Recompile the model for these modifications to take effect
+    model.compile(optimizer=Adam(learning_rate=0.0001), loss='categorical_crossentropy', metrics=['accuracy', AUC(name='mAP')])
+
+    # Continue training the model with unfrozen layers
+    history_fine_tune = model.fit(
+        train_generator,
+        epochs=epochs,
+        validation_data=validation_generator,
+        callbacks=[early_stopping, reduce_lr]
+    )
+
+    # Combine histories
+    for key in history.history.keys():
+        history.history[key] += history_fine_tune.history[key]
+
     # Measure training time
     end_time = time.time()
 
-        # Evaluate the model
+    # Evaluate the model
     test_loss, test_accuracy, test_mAP = model.evaluate(test_generator)
     print(f"Test accuracy: {test_accuracy}")
     print(f"Test mAP: {test_mAP}")
@@ -125,7 +151,7 @@ def train_model(base_model):
     print(f"Training time: {end_time - start_time} seconds")
 
     # Save the trained model
-    model_name = f'{model_type}_3_classes.h5'
+    model_name = f'{model_type}_{number_classes}_classes_1.h5'
     model.save('models/' + model_name)
     return history, test_accuracy, test_mAP, end_time - start_time, model_name, model
 
@@ -174,8 +200,8 @@ elif model_type == "dense121":
     base_model = DenseNet121(weights='imagenet', include_top=False, input_shape=(img_height, img_width, 3))
 elif model_type == "mobilenetv3":
     # print("Not implemented Yet")
-    raise ValueError("Not implemented yet")
-    # base_model = MobileNetV3Large(weights='imagenet', include_top=False, input_shape=(img_height, img_width, 3))
+    # raise ValueError("Not implemented yet")
+    base_model = MobileNetV3Large(weights='imagenet', include_top=False, input_shape=(img_height, img_width, 3))
 else:
     raise ValueError("Invalid model type specified. Choose from 'resnet50', 'dense121', or 'mobilenetv3'.")
 

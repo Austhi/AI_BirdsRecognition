@@ -1,5 +1,5 @@
 import os
-from tensorflow.keras.applications import ResNet50
+from tensorflow.keras.applications import MobileNetV3Large
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Dense, GlobalAveragePooling2D, Dropout
 from tensorflow.keras.optimizers import Adam
@@ -61,7 +61,7 @@ test_generator = test_datagen.flow_from_directory(
 )
 
 # Load the ResNet50 model with pre-trained ImageNet weights, excluding the top layer
-base_model = ResNet50(weights='imagenet', include_top=False, input_shape=(img_height, img_width, 3))
+base_model = MobileNetV3Large(weights='imagenet', include_top=False, input_shape=(img_height, img_width, 3))
 
 # Add custom layers on top of the base model
 x = base_model.output

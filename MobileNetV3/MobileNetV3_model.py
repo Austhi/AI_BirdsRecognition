@@ -2,7 +2,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from tensorflow.keras import Model
-from tensorflow.keras.applications import MobileNetV3Small
+from tensorflow.keras.applications import MobileNetV3Small, MobileNetV3Large
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.layers import Dense, GlobalAveragePooling2D
 from tensorflow.keras.optimizers import Adam
@@ -44,8 +44,8 @@ class MAPCallback(Callback):
 
 
 # path for the train and validation folders
-trainPath = "C:/Users/admin/Downloads/Bird_Dataset/dataset_for_model/train"
-validPath = "C:/Users/admin/Downloads/Bird_Dataset/dataset_for_model/validation"
+trainPath = "dataset/train"
+validPath = "dataset/val"
 
 
 # image augmentation
